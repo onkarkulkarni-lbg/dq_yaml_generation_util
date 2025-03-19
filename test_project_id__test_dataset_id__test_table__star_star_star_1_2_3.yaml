@@ -1,0 +1,52 @@
+rowFilter: test_date_column > current_date()
+samplingPercent: '50'
+rules:
+- nonNullExpectation: {}
+  dimension: COMPLETENESS
+  column: bike
+  threshold: 1.0
+  ignoreNull: false
+- rangeExpectation:
+    minValue: '1800'
+    maxValue: '6660'
+    strictMinEnabled: true
+    strictMaxEnabled: true
+  dimension: VALIDITY
+  column: duration
+- uniquenessExpectation: {}
+  dimension: UNIQUENESS
+  column: rental_id
+  threshold: 1.0
+  ignoreNull: true
+- rowConditionExpectation:
+    sqlExpression: duration >= 1800
+  dimension: VALIDITY
+  column: duration
+  threshold: 1.0
+- regexExpectation:
+    regex: ^[a-zA-Z0-9]+$
+  dimension: VALIDITY
+  column: end_station_name
+  threshold: 1.0
+  ignoreNull: true
+- setExpectation:
+    values:
+    - '1'
+    - '2'
+    - '3'
+  dimension: VALIDITY
+  column: duration_ms
+  threshold: 1.0
+  ignoreNull: true
+- rowConditionExpectation:
+    sqlExpression: 0 < 'end_station_priority_id' AND 'end_station_priority_id' < 100
+  dimension: VALIDITY
+  column: end_station_priority_id
+  threshold: 1.0
+- tableConditionExpectation:
+    sqlExpression: 0 < avg(end_station_priority_id) AND avg(end_station_priority_id)
+      < 0
+  dimension: VALIDITY
+- sqlAssertion:
+    sqlStatement: SELECT * FROM $(data()} WHERE bike_id > 100
+  dimension: VALIDITY

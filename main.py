@@ -3,6 +3,7 @@ import pandas as pd
 import yaml
 from collections import OrderedDict
 
+
 def validate_directory(location):
     """
     This function will validate passed path for following..
@@ -77,7 +78,8 @@ def validate_excel(folder_path, file_name):
     # Validate TableLevel sheet
     table_level_columns = [
         'GCP Project ID', 'Bigquery Dataset ID', 'Bigquery Table Name',
-        'Partition Filter Condition', 'Data Sampling %', 'schedule_interval'
+        'Partition Filter Condition', 'Data Sampling %', 'schedule_interval',
+        'DQ Export GCP Project ID', 'DQ Export Bigquery Dataset ID', 'DQ Export Bigquery Table Name'
     ]
     if not all(col in table_level_df.columns for col in table_level_columns):
         validation_message = "TableLevel sheet is missing required columns."
@@ -115,7 +117,7 @@ def validate_excel(folder_path, file_name):
 
         # Validate Ignore Null Values column
         ignore_null_values = str(row['Ignore Null Values']).strip().upper()
-        if ignore_null_values not in ['', 'NAN','TRUE', 'FALSE']:
+        if ignore_null_values not in ['', 'NAN', 'TRUE', 'FALSE']:
             validation_message = f"'Ignore Null Values' should be empty, TRUE, or FALSE in ColumnLevel sheet at row {index + 1}."
             return False, validation_message
 
@@ -200,12 +202,11 @@ def list_all_valid_excels(location):
         if file.endswith('.xlsx'):
             print(f"Reading {location}/{file}")
             valid_excel_sheet, validation_message = validate_excel(location, file)
-            if not valid_excel_sheet :
+            if not valid_excel_sheet:
                 print(validation_message)
             else:
                 valid_excel_list.append(file)
     return valid_excel_list
-
 
 
 def process_excel_file(directory_path, excel_file_name):
@@ -255,6 +256,13 @@ def process_excel_file(directory_path, excel_file_name):
         data_sampling_percentage = table_level_row['Data Sampling %'].values[0] if not table_level_row.empty else ''
         schedule_interval = table_level_row['schedule_interval'].values[0] if not table_level_row.empty else ''
 
+        dq_export_gcp_project_id = table_level_row['DQ Export GCP Project ID'].values[
+            0] if not table_level_row.empty else ''
+        dq_export_bigquery_dataset_id = table_level_row['DQ Export Bigquery Dataset ID'].values[
+            0] if not table_level_row.empty else ''
+        dq_export_bigquery_table_name = table_level_row['DQ Export Bigquery Table Name'].values[
+            0] if not table_level_row.empty else ''
+
         for _, row in group_df.iterrows():
             column_expectation = dq_rule_expectation_dict.get(row['DQ Rule'], '')
             column_dimession = dq_rule_dimession_dict.get(row['DQ Rule'], '')
@@ -277,7 +285,10 @@ def process_excel_file(directory_path, excel_file_name):
                     "setValues": [],
                     "partition_filter_condition": partition_filter_condition,
                     "data_sampling_percentage": data_sampling_percentage,
-                    "schedule_interval": schedule_interval
+                    "schedule_interval": schedule_interval,
+                    "dq_export_gcp_project_id": dq_export_gcp_project_id,
+                    "dq_export_bigquery_dataset_id": dq_export_bigquery_dataset_id,
+                    "dq_export_bigquery_table_name": dq_export_bigquery_table_name
                 }
 
             yaml_content_dict[group_key_str]["expectation"].append(column_expectation)
@@ -299,12 +310,13 @@ def process_excel_file(directory_path, excel_file_name):
     # writting data to yaml file now
     write_yaml_files(yaml_content_dict, directory_path)
 
+
 # onkar start
 def ordered_dict_representer(dumper, data):
     """Represent OrderedDict as a regular dict in YAML."""
     items = []
     for key, value in data.items():
-        #print(f"key={key}, value={value}")
+        # print(f"key={key}, value={value}")
         # Check if the value is a non-empty string enclosed with single quotes
         if isinstance(value, str) and value.startswith("'") and value.endswith("'") and len(value) > 2:
             # Preserve the enclosing single quotes
@@ -316,6 +328,7 @@ def ordered_dict_representer(dumper, data):
 
 yaml.add_representer(OrderedDict, ordered_dict_representer, Dumper=yaml.SafeDumper)
 
+
 def write_yaml_files(yaml_content_dict, output_directory):
     """
     Write YAML files based on the provided dictionary content.
@@ -326,12 +339,13 @@ def write_yaml_files(yaml_content_dict, output_directory):
     """
     for key, value in yaml_content_dict.items():
         # Derive YAML file name
-        if value.get('schedule_interval') and isinstance(value['schedule_interval'], str) and value['schedule_interval'].strip():
+        if value.get('schedule_interval') and isinstance(value['schedule_interval'], str) and value[
+            'schedule_interval'].strip():
             modified_schedule = value['schedule_interval'].replace('*', 'star').replace(' ', '_')
 
-            yaml_file_name = key.replace('~', '__') +  '__' + modified_schedule +'.yaml'
+            yaml_file_name = key.replace('~', '__') + '__' + modified_schedule + '.yaml'
         else:
-            yaml_file_name = key.replace('~', '__') +  '.yaml'
+            yaml_file_name = key.replace('~', '__') + '.yaml'
 
         yaml_file_path = os.path.join(output_directory, yaml_file_name)
 
@@ -364,37 +378,57 @@ def write_yaml_files(yaml_content_dict, output_directory):
                 rule["ignoreNull"] = value["ignoreNull"][i].lower() == 'true'
 
             if value["minValue"][i]:
-                #rule["minValue"] = value["minValue"][i]
+                # rule["minValue"] = value["minValue"][i]
                 rule[value["expectation"][i]]["minValue"] = value["minValue"][i]
             if value["maxValue"][i]:
-                #rule["maxValue"] = value["maxValue"][i]
+                # rule["maxValue"] = value["maxValue"][i]
                 rule[value["expectation"][i]]["maxValue"] = value["maxValue"][i]
             if value["strictMinEnabled"][i]:
-                #rule["strictMinEnabled"] = value["strictMinEnabled"][i].lower() == 'true'
+                # rule["strictMinEnabled"] = value["strictMinEnabled"][i].lower() == 'true'
                 rule[value["expectation"][i]]["strictMinEnabled"] = value["strictMinEnabled"][i].lower() == 'true'
             if value["strictMaxEnabled"][i]:
-                #rule["strictMaxEnabled"] = value["strictMaxEnabled"][i].lower() == 'true'
+                # rule["strictMaxEnabled"] = value["strictMaxEnabled"][i].lower() == 'true'
                 rule[value["expectation"][i]]["strictMaxEnabled"] = value["strictMaxEnabled"][i].lower() == 'true'
 
             if value["sqlExpression"][i]:
-                #rule["sqlExpression"] = value["sqlExpression"][i]
+                # rule["sqlExpression"] = value["sqlExpression"][i]
                 if value["expectation"][i] == "sqlAssertion":
                     rule[value["expectation"][i]]["sqlStatement"] = value["sqlExpression"][i]
                 else:
                     rule[value["expectation"][i]]["sqlExpression"] = value["sqlExpression"][i]
 
             if value["regex"][i]:
-                #rule[value["expectation"][i]]["regex"] = str(value["regex"][i])
-                #temp_var = value['regex'][i]
+                # rule[value["expectation"][i]]["regex"] = str(value["regex"][i])
+                # temp_var = value['regex'][i]
                 rule[value["expectation"][i]]["regex"] = value['regex'][i]
 
             if value["setValues"][i]:
-                #rule["values"] = value["setValues"][i]
+                # rule["values"] = value["setValues"][i]
                 rule[value["expectation"][i]]["values"] = value["setValues"][i]
 
             rules.append(rule)
 
         yaml_content['rules'] = rules
+
+        # writting export result to BQ table if mentioned in the file or with default one
+        if value.get('dq_export_gcp_project_id') and isinstance(value['dq_export_gcp_project_id'], str) and value[
+            'dq_export_gcp_project_id'].strip() and value.get('dq_export_bigquery_dataset_id') and isinstance(
+            value['dq_export_bigquery_dataset_id'], str) and value[
+            'dq_export_bigquery_dataset_id'].strip() and value.get('dq_export_bigquery_table_name') and isinstance(
+            value['dq_export_bigquery_table_name'], str) and value['dq_export_bigquery_table_name'].strip():
+
+            if 'postScanActions' not in yaml_content:
+                yaml_content['postScanActions'] = {}
+
+            if 'bigqueryExport' not in yaml_content['postScanActions']:
+                yaml_content['postScanActions']['bigqueryExport'] = {}
+
+            yaml_content['postScanActions']['bigqueryExport']['resultsTable'] = (
+                f"//bigquery.googleapis.com/projects/{value.get('dq_export_gcp_project_id')}/datasets/{value.get('dq_export_bigquery_dataset_id')}/tables/{value.get('dq_export_bigquery_table_name')}"
+            )
+
+        else:
+            pass
 
         # Write YAML file
         try:
@@ -403,9 +437,42 @@ def write_yaml_files(yaml_content_dict, output_directory):
         except IOError as e:
             print(f"Error writing file {yaml_file_path}: {e}")
 
+        # generating gcloud command in separate file
+        gcloud_file_path = os.path.join(output_directory, "gcloud_commands.sh")
+        try:
+            with open(gcloud_file_path, 'a') as sh_file:
+                # check if schedule is given by user or not
+                total_field_count = yaml_file_name.split("__")
+                gcloud_command = ""
+                if len(total_field_count) == 4:
+                    gcloud_command = (
+                        f"\n"
+                        f"gcloud dataplex datascans create data-quality "
+                        f"{total_field_count[0]}__{total_field_count[1]}__{total_field_count[2]} \\ \n"
+                        f"--project=$CENTRAL_PROJECT_ID \\ \n"
+                        f"--location=$LOCATION \\ \n"
+                        f"--data-source-entity=projects/{key.split("~")[0]}/locations/$LOCATION/lakes/$LAKE/zones/$ZONE/entities/{key.split("~")[2]} \\ \n"
+                        f"--schedule=\"{total_field_count[3].replace("star","*").replace("_"," ").replace(".yaml","")}\" \\ \n"
+                        f"--data-quality-spec-file={yaml_file_path} \n"
+                    )
+                    sh_file.write(f"{gcloud_command} \n")
+                else:
+                    gcloud_command = (
+                        f"\n"
+                        f"gcloud dataplex datascans create data-quality "
+                        f"{total_field_count[0]}__{total_field_count[1]}__{total_field_count[2]} \\ \n"
+                        f"--project=$CENTRAL_PROJECT_ID \\ \n"
+                        f"--location=$LOCATION \\ \n"
+                        f"--data-source-entity=projects/{key.split("~")[0]}/locations/$LOCATION/lakes/$LAKE/zones/$ZONE/entities/{key.split("~")[2]} \\ \n"
+                        f"--data-quality-spec-file={yaml_file_path} \n"
+                    )
+                    sh_file.write(f"{gcloud_command} \n")
+
+        except IOError as e:
+            print(f"Error writing file {gcloud_file_path}: {e}")
+
 
 # onkar end
-
 
 def main():
     """
@@ -430,7 +497,7 @@ def main():
         else:
             print(f"Processing following valid excel files -{str(valid_excel_list)}")
             for elements in valid_excel_list:
-                process_excel_file(location,elements)
+                process_excel_file(location, elements)
 
 
 main()

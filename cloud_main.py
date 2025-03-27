@@ -446,7 +446,10 @@ def write_yaml_files(yaml_content_dict, bucket_path):
             bucket_name, prefix = bucket_path.replace("gs://", "").split("/", 1)
             client = storage.Client()
             bucket = client.bucket(bucket_name)
-            blob = bucket.blob(prefix + "/" + yaml_file_name)
+            if prefix == "":
+                blob = bucket.blob(prefix + "/" + yaml_file_name)
+            else:
+                blob = bucket.blob(prefix +  yaml_file_name)
 
             # Write YAML string to the blob
             blob.upload_from_string(yaml_str)
